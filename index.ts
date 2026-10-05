@@ -50,7 +50,7 @@ export default function (pi: ExtensionAPI) {
         const code: unknown = (args as { code?: unknown } | undefined)?.code;
         const intent = typeof code === "string" ? (code.match(INTENT)?.[1]?.trim() ?? "") : "";
         return new Text(
-          `${theme.fg("toolTitle", theme.bold("codemode"))} ${theme.fg("accent", intent)}`,
+          intent ? theme.fg("accent", intent) : theme.fg("toolTitle", theme.bold("codemode")),
           0,
           0,
         );
