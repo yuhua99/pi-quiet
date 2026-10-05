@@ -4,7 +4,7 @@ import type {
   ThemeColor,
   ToolRenderers,
 } from "@earendil-works/pi-coding-agent";
-import { Container, Text, TruncatedText } from "@earendil-works/pi-tui";
+import { Container, Spacer, Text, TruncatedText } from "@earendil-works/pi-tui";
 
 type CallStatus = CodemodeToolDetails["calls"][number]["status"];
 type Content = { type: string; text?: string }[];
@@ -12,7 +12,7 @@ type Content = { type: string; text?: string }[];
 const INTENT = /^[ \t]*\/\/[ \t]*@intent:[ \t]*(\S.*)$/m;
 const GUIDELINE =
   "Start every codemode script with `// @intent: <short label>` describing why it runs, in the user's language. If the script has a `// @options:` line, keep that first and put the intent on the next line.";
-const BLOCK_REASON = `Missing intent. ${GUIDELINE}`;
+const BLOCK_REASON = `Missing \`// @intent:\` line.\n${GUIDELINE}`;
 const MARKS: [CallStatus, string, ThemeColor][] = [
   ["error", "✗", "error"],
   ["cancelled", "⊘", "muted"],
@@ -20,16 +20,8 @@ const MARKS: [CallStatus, string, ThemeColor][] = [
 ];
 
 function errorLine(content: Content): string {
-  const texts = content.flatMap((item) => (item.type === "text" && item.text ? [item.text] : []));
-  if (texts.some((text) => text.includes(BLOCK_REASON))) return "blocked: missing // @intent";
-  const scriptError = texts.find((text) => text.startsWith("Script error:"));
-  const source = scriptError ? scriptError.slice("Script error:".length) : texts.join("\n");
-  return (
-    source
-      .split("\n")
-      .map((line) => line.trim())
-      .find(Boolean) ?? "error"
-  );
+  const text = content.map((item) => item.text ?? "").join("\n");
+  return (text.match(/^Script error:\n(.+)/m)?.[1] ?? text.split("\n")[0]).trim();
 }
 
 export default function (pi: ExtensionAPI) {
@@ -47,8 +39,8 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerToolRenderer((name, next) => {
     const base = next();
-    if (name !== "codemode" || !base?.renderCall || !base.renderResult) return base;
-    const { renderCall, renderResult } = base;
+    if (name !== "codemode" || !base?.renderCall) return base;
+    const { renderCall } = base;
 
     const renderers: ToolRenderers = {
       ...base,
@@ -64,8 +56,6 @@ export default function (pi: ExtensionAPI) {
         );
       },
       renderResult(result, options, theme, context) {
-        if (options.expanded)
-          return renderResult(result, options, theme, { ...context, lastComponent: undefined });
         const groups = new Map<string, CallStatus[]>();
         for (const call of (result.details as CodemodeToolDetails | undefined)?.calls ?? []) {
           groups.set(call.name, [...(groups.get(call.name) ?? []), call.status]);
@@ -79,6 +69,8 @@ export default function (pi: ExtensionAPI) {
           return line;
         });
         const component = new Container();
+        if (options.expanded && (lines.length || context.isError))
+          component.addChild(new Spacer(1));
         if (lines.length) component.addChild(new Text(lines.join("\n"), 0, 0));
         if (context.isError)
           component.addChild(
