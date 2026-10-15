@@ -10,8 +10,9 @@ type CallStatus = CodemodeToolDetails["calls"][number]["status"];
 type Content = { type: string; text?: string }[];
 
 const INTENT = /^[ \t]*\/\/[ \t]*@intent:[ \t]*(\S.*)$/m;
+const OPTIONS = /^[ \t]*\/\/ @options:[^\r\n]*/m;
 const GUIDELINE =
-  "Start every codemode script with `// @intent: <short label>` describing why it runs, in the user's language. If the script has a `// @options:` line, keep that first and put the intent on the next line.";
+  "Start every codemode script with `// @intent: <short label>` describing why it runs, in the user's language.";
 const BLOCK_REASON = `Missing \`// @intent:\` line.\n${GUIDELINE}`;
 const MARKS: [CallStatus, string, ThemeColor][] = [
   ["error", "✗", "error"],
@@ -33,8 +34,14 @@ export default function (pi: ExtensionAPI) {
   pi.on("tool_call", (event) => {
     if (event.toolName !== "codemode") return;
     const code = event.input.code;
-    if (typeof code === "string" && INTENT.test(code)) return;
-    return { block: true, reason: BLOCK_REASON };
+    if (typeof code !== "string" || !INTENT.test(code))
+      return { block: true, reason: BLOCK_REASON };
+    // pi core requires `// @options:` on line 1; move it there if the intent came first.
+    const m = code.match(OPTIONS);
+    if (m?.index) {
+      const rest = code.slice(m.index + m[0].length).replace(/^\r?\n/, "");
+      event.input.code = `${m[0].trimStart()}\n${code.slice(0, m.index)}${rest}`;
+    }
   });
 
   pi.registerToolRenderer((name, next) => {
