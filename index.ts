@@ -15,6 +15,7 @@ const GUIDELINE =
   "Start every codemode script with `// @intent: <short label>` describing why it runs, in the user's language.";
 const BLOCK_REASON = `Missing \`// @intent:\` line.\n${GUIDELINE}`;
 const MARKS: [CallStatus, string, ThemeColor][] = [
+  ["ok", "✓", "success"],
   ["error", "✗", "error"],
   ["cancelled", "⊘", "muted"],
   ["running", "…", "warning"],
@@ -68,10 +69,10 @@ export default function (pi: ExtensionAPI) {
           groups.set(call.name, [...(groups.get(call.name) ?? []), call.status]);
         }
         const lines = [...groups].map(([tool, statuses]) => {
-          let line = `${theme.fg("toolTitle", tool)} ${theme.fg("dim", `× ${statuses.length}`)}`;
+          let line = theme.fg("toolTitle", tool);
           for (const [status, mark, color] of MARKS) {
             const n = statuses.filter((s) => s === status).length;
-            if (n) line += ` ${theme.fg(color, `${mark} ${n}`)}`;
+            if (n) line += ` ${theme.fg(color, statuses.length > 1 ? `${mark}${n}` : mark)}`;
           }
           return line;
         });
