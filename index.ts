@@ -1,8 +1,9 @@
-import type {
-  CodemodeToolDetails,
-  ExtensionAPI,
-  ThemeColor,
-  ToolRenderers,
+import {
+  type CodemodeToolDetails,
+  type ExtensionAPI,
+  type ThemeColor,
+  type ToolRenderers,
+  isToolCallEventType,
 } from "@earendil-works/pi-coding-agent";
 import { Container, Spacer, Text, TruncatedText } from "@earendil-works/pi-tui";
 
@@ -14,6 +15,8 @@ const OPTIONS = /^[ \t]*\/\/ @options:[^\r\n]*/m;
 const GUIDELINE =
   "Start every codemode script with `// @intent: <short label>` describing why it runs, in the user's language.";
 const BLOCK_REASON = `Missing \`// @intent:\` line.\n${GUIDELINE}`;
+const BASH_TIMEOUT = 60;
+const BASH_GUIDELINE = `bash commands time out after ${BASH_TIMEOUT} seconds unless \`timeout\` is set. Do not run find, rg, or grep on \`/\` or \`~\` without a depth limit.`;
 const MARKS: [CallStatus, string, ThemeColor][] = [
   ["ok", "", "dim"],
   ["error", "✗", "error"],
@@ -28,11 +31,17 @@ function errorLine(content: Content): string {
 
 export default function (pi: ExtensionAPI) {
   pi.on("before_agent_start", (event) => {
-    const guidelines = event.systemPromptOptions.toolGuidelines;
+    const options = event.systemPromptOptions;
+    const guidelines = options.toolGuidelines;
     if (guidelines.codemode) guidelines.codemode = [...guidelines.codemode, GUIDELINE];
+    options.promptGuidelines = [...options.promptGuidelines, BASH_GUIDELINE];
   });
 
   pi.on("tool_call", (event) => {
+    if (isToolCallEventType("bash", event)) {
+      event.input.timeout ??= BASH_TIMEOUT;
+      return;
+    }
     if (event.toolName !== "codemode") return;
     const code = event.input.code;
     if (typeof code !== "string" || !INTENT.test(code))
